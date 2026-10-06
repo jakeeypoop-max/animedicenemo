@@ -1,7 +1,7 @@
 --[[
     Anime-Dice | NemoHubs
     Custom UI (no external UI library)
-    Toggle menu: RightShift or the floating "N" orb
+    Toggle menu: RightShift or the top open button
 ]]
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -19,13 +19,14 @@ local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
 -- Silence Luau unknown-global warnings for executor globals.
 local syn    = rawget(getfenv and getfenv() or _G, "syn")    or _G.syn
 local fluxus = rawget(getfenv and getfenv() or _G, "fluxus") or _G.fluxus
 
----------------------------------------------------------------------
+local LOGO_ID = "rbxthumb://type=Asset&id=120917921099950&w=420&h=420"
 
 ----------------------------------------------------------------------
 -- THEME
@@ -242,6 +243,8 @@ local function MakeUI(cfg)
 			local old = s and s:FindFirstChild(cfg.GuiName)
 			if old then old:Destroy() end
 		end
+		local oldBlur = Lighting:FindFirstChild("NemoBlur")
+		if oldBlur then oldBlur:Destroy() end
 	end
 	cleanOld()
 
@@ -252,6 +255,12 @@ local function MakeUI(cfg)
 	pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
 	local okParent = pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 	if not okParent or not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+	-- Blur applied to the game world behind the menu
+	local blur = Instance.new("BlurEffect")
+	blur.Name = "NemoBlur"
+	blur.Size = 0
+	blur.Parent = Lighting
 
 	local cam = workspace.CurrentCamera
 	local vp = cam and cam.ViewportSize or Vector2.new(1024, 768)
@@ -273,7 +282,7 @@ local function MakeUI(cfg)
 
 	local main = new("CanvasGroup", {
 		Name = "Main", Active = true, GroupTransparency = 1,
-		Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg,
+		Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg, BackgroundTransparency = 0.12,
 	}, win)
 	corner(main, 14)
 	stroke(main, Theme.Stroke)
@@ -290,10 +299,12 @@ local function MakeUI(cfg)
 			tween(winScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 			tween(main, 0.25, { GroupTransparency = 0 })
 			tween(shadow, 0.3, { ImageTransparency = 0.3 })
+			tween(blur, 0.3, { Size = 18 })
 		else
 			tween(winScale, 0.2, { Scale = 0.94 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 			tween(main, 0.2, { GroupTransparency = 1 })
 			tween(shadow, 0.2, { ImageTransparency = 1 })
+			tween(blur, 0.2, { Size = 0 })
 			task.delay(0.22, function()
 				if isOpen == false then win.Visible = false end
 			end)
@@ -302,15 +313,17 @@ local function MakeUI(cfg)
 
 	local header = new("Frame", { Active = true, Size = UDim2.new(1, 0, 0, HEAD_H), BackgroundTransparency = 1 }, main)
 
+	-- Header logo (spinning gradient ring + logo image), sits beside the name
 	local logo = new("Frame", {
-		Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(16, 11), BackgroundColor3 = Theme.Accent,
+		Size = UDim2.fromOffset(36, 36), Position = UDim2.fromOffset(16, 10), BackgroundColor3 = Theme.Accent,
 	}, header)
-	corner(logo, 17)
+	corner(logo, 18)
 	local logoGrad = gradient(logo, Theme.Accent, Theme.AccentDeep, 45)
-	mkLabel({
-		Text = "N", Font = Enum.Font.GothamBlack, TextSize = 18, TextColor3 = WHITE,
-		Size = UDim2.fromScale(1, 1),
+	local logoImg = new("ImageLabel", {
+		Size = UDim2.fromOffset(32, 32), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Theme.Bg, Image = LOGO_ID, ScaleType = Enum.ScaleType.Crop,
 	}, logo)
+	corner(logoImg, 16)
 	task.spawn(function()
 		while logo.Parent do
 			logoGrad.Rotation = 0
@@ -321,7 +334,7 @@ local function MakeUI(cfg)
 
 	mkLabel({
 		Text = string.upper(cfg.Name), Font = Enum.Font.GothamBlack, TextSize = 14,
-		Size = UDim2.fromOffset(110, HEAD_H), Position = UDim2.fromOffset(58, 0), TextXAlignment = LEFT,
+		Size = UDim2.fromOffset(110, HEAD_H), Position = UDim2.fromOffset(60, 0), TextXAlignment = LEFT,
 	}, header)
 
 	local gameLbl = mkLabel({
@@ -543,36 +556,37 @@ local function MakeUI(cfg)
 	connect(hideBtn.MouseButton1Click, function() setOpen(false) end)
 
 	do
-		local ring = new("Frame", {
-			Size = UDim2.fromOffset(56, 56), Position = UDim2.new(0, 7, 0.5, -28),
-			BackgroundTransparency = 1, ZIndex = 99,
+		local openBtn = new("TextButton", {
+			Name = "OpenButton", Text = "", Size = UDim2.fromOffset(152, 38),
+			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12),
+			BackgroundColor3 = Theme.Bg, BackgroundTransparency = 0.08, ZIndex = 100,
 		}, gui)
-		corner(ring, 28)
-		stroke(ring, Theme.Accent)
+		corner(openBtn, 19)
+		local ost = stroke(openBtn, WHITE, 1.5)
+		gradient(ost, Theme.Accent, Theme.AccentDeep, 0)
 
-		task.spawn(function()
-			while ring.Parent do
-				ring.Size = UDim2.fromOffset(56, 56)
-				ring.UIStroke.Transparency = 0
-				tween(ring, 1.8, { Size = UDim2.fromOffset(96, 96) })
-				TweenService:Create(ring.UIStroke, TweenInfo.new(1.8), { Transparency = 1 }):Play()
-				task.wait(1.8)
-			end
+		local oimg = new("ImageLabel", {
+			Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(6, 5),
+			BackgroundColor3 = Theme.Row, Image = LOGO_ID, ScaleType = Enum.ScaleType.Crop, ZIndex = 101,
+		}, openBtn)
+		corner(oimg, 14)
+
+		mkLabel({
+			Text = "NemoHubs", Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = LEFT,
+			Size = UDim2.new(1, -46, 1, 0), Position = UDim2.fromOffset(42, 0), ZIndex = 101,
+		}, openBtn)
+
+		connect(openBtn.MouseEnter, function()
+			tween(openBtn, 0.15, { Size = UDim2.fromOffset(160, 40), BackgroundTransparency = 0 })
+		end)
+		connect(openBtn.MouseLeave, function()
+			tween(openBtn, 0.15, { Size = UDim2.fromOffset(152, 38), BackgroundTransparency = 0.08 })
 		end)
 
-		local fb = new("TextButton", {
-			Text = "N", Font = Enum.Font.GothamBlack, TextSize = 20, TextColor3 = WHITE,
-			Size = UDim2.fromOffset(46, 46), Position = UDim2.new(0, 12, 0.5, -23),
-			BackgroundColor3 = Theme.Accent, ZIndex = 100,
-		}, gui)
-		corner(fb, 23)
-		gradient(fb, Theme.Accent, Theme.AccentDeep, 45)
-		stroke(fb, Theme.Accent)
-
 		local down, moved, sp, si = false, false, nil, nil
-		connect(fb.InputBegan, function(i)
+		connect(openBtn.InputBegan, function(i)
 			if isPress(i) then
-				down, moved, sp, si = true, false, fb.Position, i.Position
+				down, moved, sp, si = true, false, openBtn.Position, i.Position
 				local c
 				c = i.Changed:Connect(function()
 					if i.UserInputState == Enum.UserInputState.End then
@@ -588,8 +602,7 @@ local function MakeUI(cfg)
 				local d = i.Position - si
 				if d.Magnitude > 6 then moved = true end
 				if moved then
-					fb.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
-					ring.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X - 5, sp.Y.Scale, sp.Y.Offset + d.Y - 5)
+					openBtn.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
 				end
 			end
 		end)
@@ -1304,6 +1317,7 @@ local function MakeUI(cfg)
 
 	function W:Destroy()
 		for _, c in ipairs(Conns) do pcall(function() c:Disconnect() end) end
+		pcall(function() blur:Destroy() end)
 		pcall(function() gui:Destroy() end)
 	end
 
@@ -1334,7 +1348,7 @@ local MiscTab   = UI:Tab("Misc", "sliders", "Utilities and server tools.")
 local aboutCard = AboutTab:Card("NemoHubs")
 aboutCard:Paragraph({
 	Title = "Anime Dice",
-	Content = "Toggle this menu with RightShift or the floating N button. Settings are saved automatically.",
+	Content = "Toggle this menu with RightShift or the open button at the top. Settings are saved automatically.",
 })
 
 ----------------------------------------------------------------------
